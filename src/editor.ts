@@ -44,6 +44,13 @@ const defaultValue: NodeList = [
     type: "paragraph",
     children: [{ text: "me gusta mucho!!!!" }, { text: " la playa" }],
   },
+  {
+    type: "paragraph",
+    children: [
+      { text: "another paragraph" },
+      { text: " text go =><= there :333" },
+    ],
+  },
 ];
 
 const deepClone = rfdc();
@@ -104,6 +111,9 @@ function apply(operation: Operation) {
 
   if (operation.type === "insertText") {
     const { selection, data } = operation;
+
+    if (!data) return; // skip this one
+
     const { focus } = selection;
     const { path, offset } = focus;
 
@@ -132,7 +142,9 @@ function render() {
       .map((node: Node) => {
         if (isText(node)) return (node as TextNode).text;
         if (isElement(node))
-          return renderRecursive((node as ElementNode).children);
+          return `<div>${renderRecursive(
+            (node as ElementNode).children
+          )}</div>`;
         return "";
       })
       .join("");
@@ -164,8 +176,8 @@ const captureCompositionEnd = (editor: Editor) => {
       data,
       type: "insertText",
       selection: {
-        focus: { path: [0, 0], offset: 0 },
-        anchor: { path: [0, 0], offset: 0 },
+        focus: { path: [1, 1], offset: " text go =>".length },
+        anchor: { path: [1, 1], offset: " text go =>".length },
       },
     });
   });
