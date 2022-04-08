@@ -39,10 +39,21 @@ type Operation = {
   selection: Selection;
 };
 
+const defaultValue: NodeList = [
+  {
+    type: "paragraph",
+    children: [{ text: "me gusta mucho!!!!" }, { text: " la playa" }],
+  },
+];
+
 const deepClone = rfdc();
 
 const isText = (node: Node) => {
   return "text" in node && !("children" in node);
+};
+
+const isElement = (node: Node) => {
+  return "type" in node && "children" in node;
 };
 
 function debug() {
@@ -90,7 +101,6 @@ function findNode(path: Path) {
 
 function apply(operation: Operation) {
   console.log("APPLYING OPERATION", operation);
-  this.operations.push(operation);
 
   if (operation.type === "insertText") {
     const { selection, data } = operation;
@@ -111,16 +121,26 @@ function apply(operation: Operation) {
 
     console.log(node);
   }
+
+  this.operations.push(operation);
   this.render();
 }
 
 function render() {
-  const markupstring: string[] = this.value.map((node: Node) => {
-    if (isText(node)) return (node as TextNode).text;
-    return "";
-  });
+  function renderRecursive(nodeList: NodeList): string {
+    return nodeList
+      .map((node: Node) => {
+        if (isText(node)) return (node as TextNode).text;
+        if (isElement(node))
+          return renderRecursive((node as ElementNode).children);
+        return "";
+      })
+      .join("");
+  }
 
-  (this as Editor).editorElement.innerHTML = markupstring.join("");
+  const markupstring: string = renderRecursive(this.value);
+
+  (this as Editor).editorElement.innerHTML = markupstring;
 }
 
 const captureCompositionStart = (editor: Editor) => {
@@ -144,8 +164,8 @@ const captureCompositionEnd = (editor: Editor) => {
       data,
       type: "insertText",
       selection: {
-        focus: { path: [0], offset: 0 },
-        anchor: { path: [0], offset: 0 },
+        focus: { path: [0, 0], offset: 0 },
+        anchor: { path: [0, 0], offset: 0 },
       },
     });
   });
@@ -164,7 +184,7 @@ export const createEditor = (root: HTMLElement) => {
     inputCapture,
     isComposing: false,
     operations: [],
-    value: [{ text: "sample text" }],
+    value: defaultValue,
     debug: (...args) => debug.call(editor, ...args),
     apply: (...args) => apply.call(editor, ...args),
     render: (...args) => render.call(editor, ...args),
