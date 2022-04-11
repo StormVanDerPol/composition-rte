@@ -39,6 +39,7 @@ type Selection = {
 enum ops {
   INSERT_TEXT,
   REMOVE_TEXT,
+  SET_SELECTION,
 }
 
 type Operation = {
@@ -153,9 +154,10 @@ function apply(operation: Operation) {
   console.log("APPLYING OPERATION", operation);
 
   if (operation.type === ops.INSERT_TEXT) {
-    const { selection, data } = operation;
+    let { selection, data } = operation;
 
     if (!data) return; // skip this one
+    if (!selection) selection = this.selection;
 
     const { focus } = selection;
     const { path, offset } = focus;
@@ -169,6 +171,12 @@ function apply(operation: Operation) {
     (node as TextNode).text = `${text.slice(0, offset)}${data}${text.slice(
       offset
     )}`;
+  } else if (operation.type === ops.SET_SELECTION) {
+    const { selection } = operation;
+
+    if (!selection) throw new Error("No selection provided to set selection");
+
+    this.selection = selection;
   }
 
   this.operations.push(operation);
@@ -203,7 +211,7 @@ const captureCompositionStart = (editor: Editor) => {
 };
 
 const captureCompositionEnd = (editor: Editor) => {
-  const { inputCapture, operations } = editor;
+  const { inputCapture } = editor;
 
   inputCapture.addEventListener("compositionend", (e) => {
     editor.isComposing = false;
@@ -217,10 +225,7 @@ const captureCompositionEnd = (editor: Editor) => {
     editor.apply({
       data,
       type: ops.INSERT_TEXT,
-      selection: {
-        focus: { path: [1, 1], offset: " text go =>".length },
-        anchor: { path: [1, 1], offset: " text go =>".length },
-      },
+      selection: editor.selection,
     });
   });
 };
@@ -250,6 +255,15 @@ export const createEditor = (root: HTMLElement) => {
 
   captureCompositionStart(editor);
   captureCompositionEnd(editor);
+
+  editor.apply({
+    type: ops.SET_SELECTION,
+    data: "",
+    selection: {
+      anchor: { path: editor.start().path, offset: 0 },
+      focus: { path: editor.start().path, offset: 0 },
+    },
+  });
 
   editor.render();
 
