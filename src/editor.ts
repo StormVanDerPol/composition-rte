@@ -20,10 +20,13 @@ type Editor = {
   isComposing: Boolean;
   operations: Operation[];
   value: NodeList;
+  selection: Selection;
   apply: (operation: Operation) => void;
   render: () => void;
   debug: () => void;
   findNode: (path: Path) => Node;
+  start: () => { node: Node; path: Path };
+  end: () => { node: Node; path: Path };
 };
 
 type Path = number[];
@@ -33,8 +36,13 @@ type Selection = {
   anchor: { path: Path; offset: number };
 };
 
+enum ops {
+  INSERT_TEXT,
+  REMOVE_TEXT,
+}
+
 type Operation = {
-  type: "insertText" | "removeText";
+  type: ops;
   data: string;
   selection: Selection;
 };
@@ -82,6 +90,43 @@ function debug() {
   }, 1000);
 }
 
+// gets first text node + path
+function start() {
+  const findStart = (nodeList: NodeList, path: Path) => {
+    for (const [index, node] of nodeList.entries()) {
+      path.push(index);
+
+      if (isElement(node))
+        return findStart((node as ElementNode).children, path);
+      if (isText(node)) return { node, path };
+
+      throw new Error("Hell the what?");
+    }
+  };
+
+  return findStart(this.value, []);
+}
+
+// gets last text node + path
+function end() {
+  const findEnd = (nodeList: NodeList, path: Path) => {
+    for (const reversedIndex in nodeList) {
+      const index = nodeList.length - 1 - Number(reversedIndex);
+
+      const node = nodeList[index];
+
+      path.push(index);
+
+      if (isElement(node)) return findEnd((node as ElementNode).children, path);
+      if (isText(node)) return { node, path };
+
+      throw new Error("Hell the what?");
+    }
+  };
+
+  return findEnd(this.value, []);
+}
+
 function findNode(path: Path) {
   function findNodeRecursive(currentPath: Path, currentValue: NodeList) {
     const level = currentPath.shift();
@@ -101,23 +146,19 @@ function findNode(path: Path) {
 
   const mutablePath = deepClone(path);
 
-  console.log("waa", this.value);
-
   return findNodeRecursive(mutablePath, this.value);
 }
 
 function apply(operation: Operation) {
   console.log("APPLYING OPERATION", operation);
 
-  if (operation.type === "insertText") {
+  if (operation.type === ops.INSERT_TEXT) {
     const { selection, data } = operation;
 
     if (!data) return; // skip this one
 
     const { focus } = selection;
     const { path, offset } = focus;
-
-    console.log(this.value, path);
 
     const node: Node = this.findNode(path); // <--- still mutable
 
@@ -128,8 +169,6 @@ function apply(operation: Operation) {
     (node as TextNode).text = `${text.slice(0, offset)}${data}${text.slice(
       offset
     )}`;
-
-    console.log(node);
   }
 
   this.operations.push(operation);
@@ -155,9 +194,10 @@ function render() {
   (this as Editor).editorElement.innerHTML = markupstring;
 }
 
+/* dom event capturing */
+
 const captureCompositionStart = (editor: Editor) => {
   editor.inputCapture.addEventListener("compositionstart", (e) => {
-    console.log(e);
     editor.isComposing = true;
   });
 };
@@ -166,15 +206,17 @@ const captureCompositionEnd = (editor: Editor) => {
   const { inputCapture, operations } = editor;
 
   inputCapture.addEventListener("compositionend", (e) => {
-    console.log(e);
     editor.isComposing = false;
     inputCapture.value = "";
 
     const { data } = e;
 
+    console.log("start: ", editor.start());
+    console.log("end: ", editor.end());
+
     editor.apply({
       data,
-      type: "insertText",
+      type: ops.INSERT_TEXT,
       selection: {
         focus: { path: [1, 1], offset: " text go =>".length },
         anchor: { path: [1, 1], offset: " text go =>".length },
@@ -197,10 +239,13 @@ export const createEditor = (root: HTMLElement) => {
     isComposing: false,
     operations: [],
     value: defaultValue,
+    selection: null,
     debug: (...args) => debug.call(editor, ...args),
     apply: (...args) => apply.call(editor, ...args),
     render: (...args) => render.call(editor, ...args),
     findNode: (...args) => findNode.call(editor, ...args),
+    start: (...args) => start.call(editor, ...args),
+    end: (...args) => end.call(editor, ...args),
   };
 
   captureCompositionStart(editor);
